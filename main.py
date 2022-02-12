@@ -9,7 +9,9 @@ start_message = 'Привет, я бот для заработка на выпо
 # стартовая клава
 start_keyboard = telebot.types.ReplyKeyboardMarkup(True)
 zarab_message = 'Зарабатывать🔥🔥🔥'
-start_keyboard.row(zarab_message)
+rekviz_message = 'Ввести свои реквизиты'
+account_message = 'Мой аккаунт'
+start_keyboard.row(zarab_message,rekviz_message)
 
 # клава на владение акком одной из платформ
 email_acсess_keyboard = telebot.types.ReplyKeyboardMarkup(True)
@@ -30,6 +32,12 @@ sex_keyboard = telebot.types.ReplyKeyboardMarkup(True)
 sex_messages = ['Мужской👱🏼‍♂', 'Женский👩🏽‍🦰']
 sex_keyboard.row(sex_messages[0], sex_messages[1])
 
+# клава аккаунта
+account_keyboard = telebot.types.ReplyKeyboardMarkup(True)
+account_messages = ['Вернуться к заданиям', 'Изменить информацию об аккаунте']
+account_keyboard.row(account_messages[0], account_messages[1])
+
+
 
 
 
@@ -40,8 +48,26 @@ def message_text_handler(message):
     print(message.text)
     if message.text == '/start':
         bot.send_message(message.from_user.id, start_message, reply_markup=start_keyboard)
+    if message.text == account_message:
+        bot.send_message(message.from_user.id,'Вот информация о твоем аккаунте', reply_markup=account_keyboard)
+        # sql запрос спиздить фулл инфу об аккаунте
+        pass
+    if message.text == account_messages[0]:
+        # вернуть обратно
+        pass
+    if message.text == account_messages[1]:
+        #sql фулл перезапись данных юзера
+        pass
+
     if message.text == zarab_message:
         bot.send_message(message.from_user.id, 'Окей, у тебя есть электронная почта?', reply_markup=email_acсess_keyboard)
+    if message.text == rekviz_message:
+        bot.send_message(message.from_user.id, 'Введи свои реквизиты(Qiwi,Webmoney,Сбер и т.д)')
+        # как то спиздить инфу после этого сообщения
+        # sql запрос на занесение реквизитов в бд
+        bot.send_message(message.from_user.id, 'Окей, спасибо', reply_markup=start_keyboard)
+
+        pass
     if message.text == email_yes_message:
         bot.send_message(message.from_user.id, 'Окей, на какой платформе хочешь выполнять задания?', reply_markup=platforms_keyboard)
     if message.text == email_no_message:
@@ -61,6 +87,10 @@ def message_text_handler(message):
             pass
         bot.send_message(message.from_user.id, 'Держи доступные задания на этой платформе:', reply_markup=sex_keyboard)
         # sql запрос чтобы спиздить описание заданий по категории
+
+    # if message.text == (описание задания)
+    #         выслать задание
+    #         sql запрос задание выполняется
 
 
 

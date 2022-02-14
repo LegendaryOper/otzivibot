@@ -7,7 +7,7 @@ from time import sleep
 import re
 
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
-ADMINS = []
+ADMINS = [761983343]
 bot = telebot.TeleBot(token)
 
 start_message = 'Привет, я бот для заработка на выполнении простых заданий. Если хочешь заработать, нажимай на кнопку ниже'
@@ -28,12 +28,15 @@ email_acсess_keyboard.row(email_yes_message, email_no_message)
 for_message_platforms = ['Яндекс карты', 'Google карты', 'Restoclub', 'Zoon', 'Фламп', 'Отзовик', '2ГИС', 'Allcafe']
 primer_platforms = ['Яндекс карты - 1', 'Google карты - 2', 'Restoclub - 3', 'Zoon - 4', 'Фламп - 5', 'Отзовик - 6',
                     '2ГИС - 7', 'Allcafe - 8']
-primer = '/add\nОтзыв о Мгу\n1\n50р\nЖенский\nhttps://yandex.by/maps/org/mgu/15803908161/?ll=37.552516%2C55.685061&z=17.96'\
+
+primer = '/add\nОтзыв о Мгу\n1\n50р\n1\nhttps://yandex.by/maps/org/mgu/15803908161/?ll=37.552516%2C55.685061&z=17.96'\
 '\n Тебе нужно оставить три отзыва об этом здании. Отзывы придумывай сам, главное чтобы было реалистично. Как сделаешь'\
 ' присылай скрин'
 
 platforms_ids = {'1': 'Яндекс карты', '2': 'Google карты', '3': 'Restoclub','4': 'Zoon','5': 'Фламп', '6': 'Отзовик',
                  '7': '2ГИС', '8': 'Allcafe'}
+sex = ['1 - Мужской', '2 - Женский', '3 - Любой']
+sex_array = ['Мужской', 'Женский', 'Любой']
 # клава по платформам
 platforms_keyboard = telebot.types.ReplyKeyboardMarkup(True)
 for platform in for_message_platforms:
@@ -110,7 +113,7 @@ def check_userid_in_database(id):
 def db_table_val(user_id: int):
     cursor1 = connection.cursor()
     if check_userid_in_database(user_id):
-        cursor1.execute('INSERT INTO users (user_id,full_count,now_task_id,today_tasks) VALUES (%s,0,0,0)', (user_id,))
+        cursor1.execute('INSERT INTO users (user_id,full_count,now_task_id,today_tasks,today_categories_ids) VALUES (%s,0,0,0,";")', (user_id,))
         connection.commit()
     cursor1.close()
 
@@ -127,7 +130,7 @@ def select_user_info(user_id):
     cursor1.execute('select * from users where user_id=%s', (user_id,))
     data = cursor1.fetchall()[0]
     print(data)
-    result = 'Твой пол: '+data['sex'] + '\nВсего выполнено заданий: '+str(data['full_count'])\
+    result = 'Твой пол: '+sex_array[data['sex']-1] + '\nВсего выполнено заданий: '+str(data['full_count'])\
              + '\nВыполнено заданий за сегодня: ' + str(data['today_tasks'])
     connection.commit()
     cursor1.close()
@@ -139,6 +142,53 @@ def add_user_category_now(category_id, user_id):
     cursor.execute('update users set category_id=%s where user_id=%s', (category_id, user_id))
     connection.commit()
     cursor.close()
+
+def select_tasks_ids_for_user(user_id):
+    cursor1 = connection.cursor()
+    cursor1.execute('select * from users where user_id=%s', (user_id,))
+    data = cursor1.fetchall()[0]
+    print(data)
+    pattern = r'\d+'
+    match = re.findall(pattern, str(data['today_categories_ids']))
+    if data['now_task_id'] > 0:
+        cursor1.close()
+        return False
+    elif data['today_tasks'] >= 3:
+        cursor1.close()
+        return 'too_many'
+    cursor1.execute('select id, category_id from tasks where sex in (%s,3) and category_id=%s', (data['sex'], (data['category_id'])))
+    tasks = cursor1.fetchall()
+    for task in tasks:
+        if task['category_id'] in match:
+            cursor1.close()
+            return 'banned'
+    cursor1.close()
+    return [task['id'] for task in tasks]
+
+def select_sorted_tasks(tasks_ids):
+    cursor = connection.cursor()
+    dataarr=[]
+    for ids in tasks_ids:
+        cursor.execute('select  name, sex, category_id, id from tasks where id=%s', (ids,))
+        data = cursor.fetchall()[0]
+        dataarr.append(data)
+
+    return dataarr
+
+def select_user_now_task(user_id):
+    cursor = connection.cursor()
+    cursor.execute('select * from tasks where id in (select now_task_id from users where user_id=%s)', (user_id,))
+    data=cursor.fetchall()[0]
+    cursor.execute('delete from tasks where id=%s', (data['id'],))
+    connection.commit()
+    cursor.close()
+    print(data)
+    zadaniye = 'Краткое описание: ' + data['name'] + '\nПлатформа: ' + platforms_ids[
+        str(data['category_id'])] + '\nId задания: ' + str(data['id']) +\
+               '\nПол: ' + sex_array[data['sex'] - 1] + '\nОплата: ' + data['cost'] + '\n' + '\nСсылка: ' + data[
+                   'url'] + '\nПолное описание: ' + data['descript']
+    return zadaniye
+
 
 
 
@@ -162,7 +212,7 @@ def select_last_task():
     print(data['name'])
     cursor.execute('update categories set tasks_id = concat(tasks_id,%s,";") where id = %s', (str(data['id']),str(data['category_id'])))
     zadaniye ='Краткое описание: '+data['name']+'\nПлатформа: '+platforms_ids[str(data['category_id'])]+'\nId задания: '+str(data['id'])+\
-              '\nПол: '+data['sex']+'\nОплата: '+data['cost']+'\n'+'\nСсылка: '+data['url']+'\nПолное описание: '+data['descript']
+              '\nПол: '+sex_array[data['sex']-1]+'\nОплата: '+data['cost']+'\n'+'\nСсылка: '+data['url']+'\nПолное описание: '+data['descript']
     cursor.close()
     print(zadaniye)
     return zadaniye
@@ -180,11 +230,9 @@ def select_task(task_id):
     cursor.execute('select * from tasks where id=%s', (task_id,))
     data = cursor.fetchall()[0]
     print(data['name'])
-    cursor.execute('update categories set tasks_id = concat(tasks_id,%s,";") where id = %s',
-                   (str(data['id']), str(data['category_id'])))
     zadaniye = 'Краткое описание: ' + data['name'] + '\nПлатформа: ' + platforms_ids[
         str(data['category_id'])] + '\nId задания: ' + str(data['id']) + \
-               '\nПол: ' + data['sex'] + '\nОплата: ' + data['cost'] + '\n' + '\nСсылка: ' + data[
+               '\nПол: ' + sex_array[data['sex']-1] + '\nОплата: ' + data['cost'] + '\n' + '\nСсылка: ' + data[
                    'url'] + '\nПолное описание: ' + data['descript']
     cursor.close()
     print(zadaniye)
@@ -200,6 +248,7 @@ def query_callback(callback_query):
     pattern = r'\d+'
     match = re.search(pattern, str(callback_query.data))
     task_id = match.group()
+    print(task_id)
     cursor = connection.cursor()
     if str(callback_query.data).startswith('admin'):
         inline_button = telebot.types.InlineKeyboardButton('Удалить задание', callback_data=f'del {task_id}')
@@ -209,7 +258,34 @@ def query_callback(callback_query):
         cursor.execute('delete from tasks where id=%s', (task_id,))
         connection.commit()
         bot.send_message(callback_query.message.chat.id, 'Задание удалено', reply_markup=admin_keyboard)
+    elif str(callback_query.data).startswith('user'):
+        inline_button = telebot.types.InlineKeyboardButton('Взяться за выполнение', callback_data=f'work {task_id}')
+        inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
+        bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
+    elif str(callback_query.data).startswith('work'):
+        cursor.execute('select category_id from tasks where id=%s', (task_id,))
+        category_id = cursor.fetchall()[0]['category_id']
+        cursor.execute(
+            'update users set now_task_id=(%s),today_categories_ids=concat(today_categories_ids,%s) where user_id = %s'
+            , (task_id, str(category_id), callback_query.message.chat.id))
+        connection.commit()
+        bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
+                         reply_markup=start_keyboard)
+
+    elif str(callback_query.data).startswith('allow'):
+        cursor.execute('update users set now_task_id = 0 where user_id = %s', (task_id,))
+        connection.commit()
+        bot.send_message(task_id,'Твое задание одобрили, в ближайшее время с тобой свяжется админ.',
+                         reply_markup=start_keyboard)
+
+    elif str(callback_query.data).startswith('abadon'):
+        cursor.execute('update users set now_task_id = 0 where user_id = %s', (task_id,))
+        connection.commit()
+        bot.send_message(task_id,
+                         'Твое задание не одобрили.', reply_markup=start_keyboard)
+
     cursor.close()
+
 
 
 
@@ -231,8 +307,10 @@ def message_text_handler(message):
         if message.text == admin_messages[0]:
             bot.send_message(message.from_user.id, 'Напиши команду /add, перейди на новую строку и построчно впиши '
                                                    'мне краткое описание задания(не более 40 символов), номер платформы,'
-                                                   'цену задания, пол, ссылку, полное описание задания')
+                                                   'цену задания, номер пола, ссылку, полное описание задания')
             bot.send_message(message.from_user.id, 'Доступные платформы:\n'+'\n'.join(primer_platforms))
+            bot.send_message(message.from_user.id, 'Номера полов:\n' + '\n'.join(sex))
+
             bot.send_message(message.from_user.id, 'Пример:\n'+primer)
         if message.text.startswith('/add'):
             taskarr = message.text.split('\n')
@@ -250,7 +328,7 @@ def message_text_handler(message):
                     inline_button = telebot.types.InlineKeyboardButton('Подробнее', callback_data=f'admin {task["id"]}')
                     inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
                     task_message = 'Платформа: ' + platforms_ids[str(task['category_id'])] + '\nЗаголовок: '\
-                                   + task['name'] + '\nПол: ' + task['sex']
+                                   + task['name'] + '\nПол: ' + sex_array[task['sex']-1]
                     bot.send_message(user_id, task_message, reply_markup=inline_keyboard)
             except Exception as ex:
                 bot.send_message(message.from_user.id, 'Упс..что то пошло не так, попробуй еще раз',reply_markup=admin_keyboard)
@@ -263,7 +341,6 @@ def message_text_handler(message):
             bot.send_message(message.from_user.id, start_message, reply_markup=start_keyboard)
         elif message.text == account_message:
             bot.send_message(message.from_user.id,'Вот информация о твоем аккаунте', reply_markup=account_keyboard)
-            select_user_info(user_id)
             bot.send_message(message.from_user.id, select_user_info(user_id), reply_markup=account_keyboard)
         elif message.text == account_messages[0]:
             bot.send_message(message.from_user.id, 'Возвращаю...', reply_markup=start_keyboard)
@@ -284,12 +361,37 @@ def message_text_handler(message):
             bot.send_message(message.from_user.id, 'Понял, какого ты пола?', reply_markup=sex_keyboard)
         elif message.text in sex_messages:
             if message.text == sex_messages[0]:
-                add_sex_to_user('Мужской',user_id)
+                add_sex_to_user('1',user_id)
             else:
-                add_sex_to_user('Женский',user_id)
-                pass
-            bot.send_message(message.from_user.id, 'Держи доступные задания на этой платформе:', reply_markup=select_keyboard)
-            # sql запрос чтобы спиздить описание заданий по категории
+                add_sex_to_user('2',user_id)
+            select = select_tasks_ids_for_user(user_id)
+            if select == False:
+                bot.send_message(message.from_user.id, 'Сначала сделай задание, за которое взялся',
+                                 reply_markup=select_keyboard)
+            elif select == 'too_many':
+                bot.send_message(message.from_user.id, 'Ты сделал слишком много заданий за сегодня, приходи завтра',
+                                 reply_markup=select_keyboard)
+            elif select == 'banned':
+                bot.send_message(message.from_user.id, 'Ты уже сегодня делал задание на этой платформе! Выбери другую!',
+                                 reply_markup=select_keyboard)
+            elif len(select) == 0:
+                bot.send_message(message.from_user.id, 'Для тебя нет подходящих заданий',
+                                 reply_markup=select_keyboard)
+            else:
+
+                for task in select_sorted_tasks(select):
+                    sleep(0.1)
+                    inline_button = telebot.types.InlineKeyboardButton('Подробнее',
+                                                                       callback_data=f'user {task["id"]}')
+                    inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
+                    task_message = 'Платформа: ' + platforms_ids[str(task['category_id'])] + '\nЗаголовок: ' \
+                                   + task['name'] + '\nПол: ' + sex_array[task['sex'] - 1]
+                    bot.send_message(user_id, task_message, reply_markup=inline_keyboard)
+                # except Exception as ex:
+                #     bot.send_message(message.from_user.id, 'Упс..что то пошло не так, сообщи админу',
+                #                      reply_markup=start_keyboard)
+                #     print(ex)
+
         elif message.text == select_messages[1]:
             bot.send_message(message.from_user.id, 'Напиши мне id задания за которое хочешь взяться')
 
@@ -302,6 +404,20 @@ def message_text_handler(message):
         else:bot.send_message(message.from_user.id, 'Я тебя не понимаю', reply_markup=start_keyboard)
 
 
+@bot.message_handler(content_types=['photo'])
+def photo_handler(message):
+    bot.send_message(message.from_user.id,'Молодец! Твое задание на проверке у админа. Как только твое задание проверят'
+                                          '- тебе придет сообщение. Если все хорошо, с тобой лично свяжется админ для'
+                                          'оплаты',reply_markup=start_keyboard)
+    inline_button = telebot.types.InlineKeyboardButton('Принять', callback_data=f'allow {message.from_user.id}')
+    inline_button1 = telebot.types.InlineKeyboardButton('Отклонить', callback_data=f'abadon {message.from_user.id}')
+    inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button,inline_button1)
+    task=select_user_now_task(message.from_user.id)
+    for admin in ADMINS:
+        bot.send_message(admin, f'Пользователь @{message.from_user.username} прислал скриншот на проверку\n'
+                                f'Вот его задание:\n'+task)
+        idphoto = message.photo[0].file_id
+        bot.send_photo(admin, idphoto, reply_markup=inline_keyboard)
 
 
 

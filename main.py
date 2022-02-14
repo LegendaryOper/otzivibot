@@ -1,9 +1,10 @@
 #761983343
+from threading import Thread
 
 import telebot
 import pymysql
 from config import *
-from time import sleep
+from time import sleep,time
 import re
 
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
@@ -150,6 +151,7 @@ def select_tasks_ids_for_user(user_id):
     print(data)
     pattern = r'\d+'
     match = re.findall(pattern, str(data['today_categories_ids']))
+    print('match',match)
     if data['now_task_id'] > 0:
         cursor1.close()
         return False
@@ -159,7 +161,8 @@ def select_tasks_ids_for_user(user_id):
     cursor1.execute('select id, category_id from tasks where sex in (%s,3) and category_id=%s', (data['sex'], (data['category_id'])))
     tasks = cursor1.fetchall()
     for task in tasks:
-        if task['category_id'] in match:
+        print('task',task['category_id'])
+        if str(task['category_id']) in match:
             cursor1.close()
             return 'banned'
     cursor1.close()
@@ -172,7 +175,7 @@ def select_sorted_tasks(tasks_ids):
         cursor.execute('select  name, sex, category_id, id from tasks where id=%s', (ids,))
         data = cursor.fetchall()[0]
         dataarr.append(data)
-
+    cursor.close()
     return dataarr
 
 def select_user_now_task(user_id):
@@ -239,7 +242,12 @@ def select_task(task_id):
     return zadaniye
 
 
-
+def update_after_task_upload(user_id):
+    cursor = connection.cursor()
+    cursor.execute('update users set now_task_id = 0,full_count = full_count+1,today_tasks=today_tasks+1'
+                   ' where user_id = %s', (user_id,))
+    connection.commit()
+    cursor.close()
 
 
 
@@ -267,23 +275,18 @@ def query_callback(callback_query):
         category_id = cursor.fetchall()[0]['category_id']
         cursor.execute(
             'update users set now_task_id=(%s),today_categories_ids=concat(today_categories_ids,%s) where user_id = %s'
-            , (task_id, str(category_id), callback_query.message.chat.id))
+            , (task_id, str(category_id)+';', callback_query.message.chat.id))
         connection.commit()
         bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
                          reply_markup=start_keyboard)
 
     elif str(callback_query.data).startswith('allow'):
-        cursor.execute('update users set now_task_id = 0 where user_id = %s', (task_id,))
-        connection.commit()
         bot.send_message(task_id,'Твое задание одобрили, в ближайшее время с тобой свяжется админ.',
                          reply_markup=start_keyboard)
 
     elif str(callback_query.data).startswith('abadon'):
-        cursor.execute('update users set now_task_id = 0 where user_id = %s', (task_id,))
-        connection.commit()
         bot.send_message(task_id,
                          'Твое задание не одобрили.', reply_markup=start_keyboard)
-
     cursor.close()
 
 
@@ -372,7 +375,7 @@ def message_text_handler(message):
                 bot.send_message(message.from_user.id, 'Ты сделал слишком много заданий за сегодня, приходи завтра',
                                  reply_markup=select_keyboard)
             elif select == 'banned':
-                bot.send_message(message.from_user.id, 'Ты уже сегодня делал задание на этой платформе! Выбери другую!',
+                bot.send_message(user_id, 'Ты уже сегодня делал задание на этой платформе! Выбери другую!',
                                  reply_markup=select_keyboard)
             elif len(select) == 0:
                 bot.send_message(message.from_user.id, 'Для тебя нет подходящих заданий',
@@ -403,29 +406,57 @@ def message_text_handler(message):
 
         else:bot.send_message(message.from_user.id, 'Я тебя не понимаю', reply_markup=start_keyboard)
 
-
-@bot.message_handler(content_types=['photo'])
+@bot.message_handler(content_types=['photo','media_group'])
 def photo_handler(message):
-    bot.send_message(message.from_user.id,'Молодец! Твое задание на проверке у админа. Как только твое задание проверят'
+    sub_id=message.from_user.id
+    bot.send_message(sub_id,'Молодец! Твое задание на проверке у админа. Как только твое задание проверят'
                                           '- тебе придет сообщение. Если все хорошо, с тобой лично свяжется админ для'
-                                          'оплаты',reply_markup=start_keyboard)
-    inline_button = telebot.types.InlineKeyboardButton('Принять', callback_data=f'allow {message.from_user.id}')
-    inline_button1 = telebot.types.InlineKeyboardButton('Отклонить', callback_data=f'abadon {message.from_user.id}')
+                                          ' оплаты',reply_markup=start_keyboard)
+    inline_button = telebot.types.InlineKeyboardButton('Принять', callback_data=f'allow {sub_id}')
+    inline_button1 = telebot.types.InlineKeyboardButton('Отклонить', callback_data=f'abadon {sub_id}')
     inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button,inline_button1)
     task=select_user_now_task(message.from_user.id)
     for admin in ADMINS:
         bot.send_message(admin, f'Пользователь @{message.from_user.username} прислал скриншот на проверку\n'
                                 f'Вот его задание:\n'+task)
+        print(message.media_group_id)
         idphoto = message.photo[0].file_id
         bot.send_photo(admin, idphoto, reply_markup=inline_keyboard)
+    update_after_task_upload(message.from_user.id)
+
+def update_with_time():
+    cursor = connection.cursor()
+    cursor.execute('update users set today_tasks = 0, today_categories_ids = ";"')
+    connection.commit()
+    cursor.close()
+    sleep(60*60*24)
+
+sql_time_update_thread = Thread(target=update_with_time)
+sql_time_update_thread.start()
+
+polling_thread = Thread(target=bot.polling, args=(True,0))
+polling_thread.start()
+
+while True:
+    sleep(50)
+    try:
+        connection = pymysql.connect(host=host,
+                                     port=3306,
+                                     user=user,
+                                     password=password,
+                                     database=db_name,
+                                     cursorclass=pymysql.cursors.DictCursor
+                                     )
+
+        db_setting1 = 'SET SQL_SAFE_UPDATES = 0'
+
+        connection.cursor().execute(db_setting1)
+
+        connection.cursor().close()
+        print('succesful')
 
 
+    except Exception as ex:
+        print("Error")
+        print(ex)
 
-
-
-
-
-
-
-
-bot.polling(none_stop=True, interval=0)

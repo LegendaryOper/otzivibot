@@ -8,7 +8,7 @@ from time import sleep,time
 import re
 
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
-ADMINS = [761983343]
+ADMINS = [619616592]
 bot = telebot.TeleBot(token)
 
 start_message = 'Привет, я бот для заработка на выполнении простых заданий. Если хочешь заработать, нажимай на кнопку ниже'
@@ -660,7 +660,6 @@ while True:
         connection.cursor().execute(db_setting1)
 
         connection.cursor().close()
-        print('succesful')
 
 
 

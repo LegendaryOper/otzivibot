@@ -8,7 +8,7 @@ from time import sleep,time
 import re
 
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
-ADMINS = []
+ADMINS = [761983343]
 bot = telebot.TeleBot(token)
 
 start_message = 'Привет, я бот для заработка на выполнении простых заданий. Если хочешь заработать, нажимай на кнопку ниже'
@@ -362,6 +362,34 @@ def send_mass_message(message_text):
         print('error in sendmass')
 
 
+def update_description(description, task_id):
+    try:
+        cursor = connection.cursor()
+        cursor.execute('update tasks set descript=%s where id=%s', (description, task_id))
+        connection.commit()
+        cursor.close()
+    except Exception as ex:
+        print('error in update_descript')
+        print(ex)
+        cursor.close()
+
+
+def send_full_task_admin(task_id,user_id):
+    try:
+        inline_button = telebot.types.InlineKeyboardButton('Удалить задание', callback_data=f'del {task_id}')
+        inline_button1 = telebot.types.InlineKeyboardButton('Сделать видимым', callback_data=f'vis {task_id}')
+        inline_button2 = telebot.types.InlineKeyboardButton('Сделать невидимым', callback_data=f'unvis {task_id}')
+        inline_button3 = telebot.types.InlineKeyboardButton('Изменить описание', callback_data=f'edit {task_id}')
+        inline_keyboard = telebot.types.InlineKeyboardMarkup().row(inline_button, inline_button1, inline_button2)
+        inline_keyboard.row(inline_button3)
+        bot.send_message(user_id, select_task(task_id), reply_markup=inline_keyboard)
+    except Exception as ex2:
+        print(ex2)
+        print('error im sendfulltask')
+        bot.send_message(user_id,'Какая то ошибка, не смог отправить тебе полное задание', reply_markup=admin_keyboard)
+
+
+
 
 
 @bot.callback_query_handler(func=lambda callback_query: True)
@@ -371,15 +399,16 @@ def query_callback(callback_query):
     task_id = match.group()
     cursor = connection.cursor()
     if str(callback_query.data).startswith('admin'):
-        inline_button = telebot.types.InlineKeyboardButton('Удалить задание', callback_data=f'del {task_id}')
-        inline_button1 = telebot.types.InlineKeyboardButton('Сделать видимым', callback_data=f'vis {task_id}')
-        inline_button2 = telebot.types.InlineKeyboardButton('Сделать невидимым', callback_data=f'unvis {task_id}')
-        inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button,inline_button1,inline_button2)
-        bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
+        send_full_task_admin(task_id, user_id=callback_query.message.chat.id)
     elif str(callback_query.data).startswith('del'):
         cursor.execute('delete from tasks where id=%s', (task_id,))
         connection.commit()
         bot.send_message(callback_query.message.chat.id, 'Задание удалено', reply_markup=admin_keyboard)
+    elif str(callback_query.data).startswith('edit'):
+        bot.send_message(callback_query.message.chat.id, 'Введи комманду /desc, айди задания и новое описание после него',
+                         reply_markup=admin_keyboard)
+        bot.send_message(callback_query.message.chat.id,
+                         f'В данном случае /desc {task_id}', reply_markup=admin_keyboard)
     elif str(callback_query.data).startswith('vis'):
         cursor.execute('update tasks set vision=1 where id=%s', (task_id,))
         connection.commit()
@@ -402,15 +431,22 @@ def query_callback(callback_query):
         bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
                          reply_markup=start_keyboard)
     elif str(callback_query.data).startswith('used'):
-        cursor.execute('update users set now_task_id=0,today_categories_ids=substring(today_categories_ids,1,length(today_categories_ids)-2)'
-                       'where user_id = %s'
-            , (callback_query.message.chat.id,))
+        cursor.execute('select new_task_today from users where user_id=%s', (callback_query.message.chat.id,))
+        new_task_today = cursor.fetchall()[0]['new_task_today']
+        if new_task_today == 1:
+            print('ты еблан')
+            bot.send_message(callback_query.message.chat.id, 'Ты уже отменял сегодня задание. Будь добр, выполни это.',
+                             reply_markup=start_keyboard)
+        else:
+            cursor.execute('update users set now_task_id=0, new_task_today = 1, '
+                           'today_categories_ids=substring(today_categories_ids,1,length(today_categories_ids)-2)'
+                           'where user_id = %s', (callback_query.message.chat.id,))
 
-        connection.commit()
-        bot.send_message(callback_query.message.chat.id, 'Окей, посмотри другие задания',
-                         reply_markup=start_keyboard)
-        select = select_tasks_ids_for_user(callback_query.message.chat.id)
-        send_sorted_tasks(callback_query.message.chat.id,select)
+            connection.commit()
+            bot.send_message(callback_query.message.chat.id, 'Окей, посмотри другие задания',
+                             reply_markup=start_keyboard)
+            select = select_tasks_ids_for_user(callback_query.message.chat.id)
+            send_sorted_tasks(callback_query.message.chat.id,select)
 
 
 
@@ -460,6 +496,20 @@ def message_text_handler(message):
             except Exception as ex:
                 bot.send_message(message.from_user.id, 'Упс..что то пошло не так, попробуй еще раз',reply_markup=admin_keyboard)
                 print(ex)
+        if message.text.startswith('/desc'):
+            try:
+                pattern = r'\d+'
+                match = re.search(pattern, str(message.text))
+                task_id = match.group()
+                description = message.text[message.text.find(task_id)+len(str(task_id))+1:]
+                print(description)
+                update_description(description, task_id)
+                bot.send_message(user_id,'Успешно обновлено, теперь задание выглядит так:', reply_markup=admin_keyboard)
+                send_full_task_admin(task_id, user_id)
+            except Exception as ex1:
+                print(ex1)
+                bot.send_message(user_id,'Упс..ошибка, попробуй еще раз', reply_markup=admin_keyboard)
+
         if message.text == admin_messages[1]:
             bot.send_message(user_id, 'Выбери, какие задания хочешь видеть', reply_markup=tasks_keyboard)
 
@@ -581,7 +631,7 @@ def photo_handler(message):
 
 def update_with_time():
     cursor = connection.cursor()
-    cursor.execute('update users set today_tasks = 0, today_categories_ids = ";"')
+    cursor.execute('update users set today_tasks = 0, today_categories_ids = ";", new_task_today = 0')
     connection.commit()
     cursor.close()
     sleep(60*60*24)

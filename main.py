@@ -7,6 +7,24 @@ from config import *
 from time import sleep,time
 import re
 
+
+
+def connect_to_db():
+    connection = pymysql.connect(host=host,
+                                 port=3306,
+                                 user=user,
+                                 password=password,
+                                 database=db_name,
+                                 cursorclass=pymysql.cursors.DictCursor
+                                 )
+
+    db_setting1 = 'SET SQL_SAFE_UPDATES = 0'
+
+    connection.cursor().execute(db_setting1)
+
+    connection.cursor().close()
+    return connection
+connection = connect_to_db()
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
 ADMINS = [619616592,761983343]
 bot = telebot.TeleBot(token)
@@ -81,33 +99,6 @@ for platform in for_message_platforms:
 
 
 
-try:
-    connection = pymysql.connect(host=host,
-                                 port=3306,
-                                 user=user,
-                                 password=password,
-                                 database=db_name,
-                                 cursorclass=pymysql.cursors.DictCursor
-                                 )
-
-
-    db_setting1 = 'SET SQL_SAFE_UPDATES = 0'
-
-
-    connection.cursor().execute(db_setting1)
-
-    connection.cursor().close()
-    print('succesful')
-
-
-except Exception as ex:
-    print("Error")
-    print(ex)
-
-
-
-
-
 
 
 # клава для определения пола юзера
@@ -140,99 +131,127 @@ exit_keyboard.row('Назад')
 # функции
 def check_userid_in_database(id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute("SELECT user_id FROM users WHERE user_id=%s", (id,))
         data = cursor.fetchall()
+        cursor.close()
+        connection.close()
         if len(data) == 0:
-            cursor.close()
             return True
         else:
-            cursor.close()
             return False
     except Exception as ex:
         print("Ошибка в checkuserid")
         print(ex)
+        cursor.close()
+
 
 
 def check_pravila(user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('select pravila from users where user_id=%s', (user_id,))
         data = cursor.fetchall()[0]['pravila']
+        print(data, user_id)
         cursor.close()
+        connection.close()
         if data == 0:
             return False
+        elif data is None:
+            print('checkpravila none')
+            bot.send_message(user_id, 'Какая то ошибка, попробуй еще раз', reply_markup=start_keyboard)
         else:
             return True
     except Exception as ex3:
         print(ex3)
         print('error in checkpravila')
 
+
 def add_user_pravila(user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('update users set pravila = 1 where user_id=%s', (user_id,))
         connection.commit()
         cursor.close()
+        connection.close()
     except Exception as ex3:
         print(ex3)
         print('error in adduserpravila')
+        cursor.close()
 
 
 
 def db_table_val(user_id: int):
     try:
+        connection = connect_to_db()
         cursor1 = connection.cursor()
         if check_userid_in_database(user_id):
             cursor1.execute('INSERT INTO users (user_id,full_count,now_task_id,today_tasks,today_categories_ids, pravila) VALUES (%s,0,0,0,";",0)', (user_id,))
             connection.commit()
         cursor1.close()
+        connection.close()
     except Exception as ex:
         print('Error in dbtableval')
         print(ex)
 
 
+
 def add_sex_to_user(sex,user_id):
     try:
+        connection = connect_to_db()
         cursor1 = connection.cursor()
         cursor1.execute('update users set sex =%s where user_id=%s', (sex, user_id))
         connection.commit()
         cursor1.close()
+        connection.close()
     except Exception as ex:
         print('error in add sex to user')
         print(ex)
 
 
+
 def select_user_info(user_id):
     try:
+        connection = connect_to_db()
         cursor1 = connection.cursor()
         cursor1.execute('select * from users where user_id=%s', (user_id,))
         data = cursor1.fetchall()[0]
+        print(cursor1.fetchall())
         try:
             result = 'Твой пол: '+sex_array[data['sex']-1] + '\nВсего выполнено заданий: '+str(data['full_count'])\
                  + '\nВыполнено заданий за сегодня: ' + str(data['today_tasks'])
             connection.commit()
             cursor1.close()
         except Exception:
+            cursor1.close()
             return 'У нас пока нет информации о твоем аккаунте, ты только запустил бота)'
+        connection.close()
         return result
     except Exception as ex:
         print('error in select user info')
         print(ex)
 
 
+
 def add_user_category_now(category_id, user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('update users set category_id=%s where user_id=%s', (category_id, user_id))
         connection.commit()
         cursor.close()
+        connection.close()
     except Exception as ex:
         print('error in addusercategorynow')
         print(ex)
 
+
 def select_tasks_ids_for_user(user_id):
     try:
+        connection = connect_to_db()
         cursor1 = connection.cursor()
         cursor1.execute('select * from users where user_id=%s', (user_id,))
         data = cursor1.fetchall()[0]
@@ -240,9 +259,11 @@ def select_tasks_ids_for_user(user_id):
         match = re.findall(pattern, str(data['today_categories_ids']))
         if data['now_task_id'] > 0:
             cursor1.close()
+            connection.close()
             return False
         elif data['today_tasks'] >= 3:
             cursor1.close()
+            connection.close()
             return 'too_many'
         cursor1.execute('select id, category_id from tasks where vision = 1 and sex in (%s,3) and category_id=%s',
                         (data['sex'], (data['category_id'])))
@@ -250,15 +271,19 @@ def select_tasks_ids_for_user(user_id):
         for task in tasks:
             if str(task['category_id']) in match:
                 cursor1.close()
+                connection.close()
                 return 'banned'
         cursor1.close()
+        connection.close()
         return [task['id'] for task in tasks]
     except Exception as ex:
         print(ex)
         print('error in selecttasksidsforuser')
 
+
 def select_sorted_tasks(tasks_ids):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         dataarr=[]
         for ids in tasks_ids:
@@ -266,13 +291,16 @@ def select_sorted_tasks(tasks_ids):
             data = cursor.fetchall()[0]
             dataarr.append(data)
         cursor.close()
+        connection.close()
         return dataarr
     except Exception as ex:
         print('error in selectsortedtasks')
         print(ex)
 
+
 def select_user_now_task(user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         try:
             cursor.execute('select * from tasks where id in (select now_task_id from users where user_id=%s)', (user_id,))
@@ -284,6 +312,7 @@ def select_user_now_task(user_id):
         cursor.execute('update tasks set vision = 0 where id=%s', (data['id'],))
         connection.commit()
         cursor.close()
+        connection.close()
         zadaniye = 'Краткое описание: ' + data['name'] + '\nПлатформа: ' + platforms_ids[
             str(data['category_id'])] + '\nId задания: ' + str(data['id']) +\
                    '\nПол: ' + sex_array[data['sex'] - 1] + '\nОплата: ' + data['cost'] + '\n' + '\nСсылка: ' + data[
@@ -293,12 +322,15 @@ def select_user_now_task(user_id):
         print(ex)
         print('error in selectusernowtask')
 
+
 def select_user_now_task_id(user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('select now_task_id from users where user_id=%s', (user_id,))
         task_id = cursor.fetchall()[0]['now_task_id']
         cursor.close()
+        connection.close()
         return task_id
     except Exception as ex:
         print(ex)
@@ -306,8 +338,10 @@ def select_user_now_task_id(user_id):
 
 
 
+
 def send_sorted_tasks(user_id,select):
     try:
+        connection = connect_to_db()
         for task in select_sorted_tasks(select):
             sleep(0.1)
             inline_button = telebot.types.InlineKeyboardButton('Взяться за задание',
@@ -316,6 +350,7 @@ def send_sorted_tasks(user_id,select):
             task_message = 'Платформа: ' + platforms_ids[str(task['category_id'])] + '\nЗаголовок: ' \
                            + task['name'] + '\nПол: ' + sex_array[task['sex'] - 1]
             bot.send_message(user_id, task_message, reply_markup=inline_keyboard)
+        connection.close()
     except Exception as ex:
         bot.send_message(user_id, 'Упс..что то пошло не так, сообщи админу',
                          reply_markup=start_keyboard)
@@ -325,37 +360,46 @@ def send_sorted_tasks(user_id,select):
 
 
 
+
 # функции админа
 # добавление записей
 def add_task(arr1):
     try:
+        connection = connect_to_db()
         arr1 = [i.strip() for i in arr1]
         cursor = connection.cursor()
         cursor.execute('insert into tasks(name,category_id,cost,sex,url,descript,vision) '\
                        'values (%s,%s,%s,%s,%s,%s,true)', (arr1[1], arr1[2], arr1[3], arr1[4], arr1[5], arr1[6]))
         connection.commit()
         cursor.close()
+        connection.close()
     except Exception as ex:
         print('error in addtask')
         print('ex')
 
+
 def select_last_task():
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('select * from tasks order by id DESC limit 1')
         data=cursor.fetchall()[0]
         cursor.execute('update categories set tasks_id = concat(tasks_id,%s,";") where id = %s', (str(data['id']),str(data['category_id'])))
+        connection.commit()
         zadaniye ='Краткое описание: '+data['name']+'\nПлатформа: '+platforms_ids[str(data['category_id'])]+'\nId задания: '+str(data['id'])+\
                   '\nПол: '+sex_array[data['sex']-1]+'\nОплата: '+data['cost']+'\n'+'\nСсылка: '+data['url']+'\nПолное описание: '+data['descript']
         cursor.close()
+        connection.close()
         return zadaniye
     except Exception as ex:
         print('error in selectlasttask')
         print(ex)
 
 
+
 def select_all_tasks(flag):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         if flag == 1:
             cursor.execute('select name, sex, category_id, id from tasks where vision = 1')
@@ -363,13 +407,16 @@ def select_all_tasks(flag):
             cursor.execute('select name, sex, category_id, id from tasks where vision = 0')
         data = cursor.fetchall()
         cursor.close()
+        connection.close()
         return data
     except Exception as ex:
         print(ex)
         print('error in selectalltasks')
 
+
 def select_task(task_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('select * from tasks where id=%s', (task_id,))
         data = cursor.fetchall()[0]
@@ -377,31 +424,37 @@ def select_task(task_id):
             str(data['category_id'])] + '\nId задания: ' + str(data['id']) + \
                    '\nПол: ' + sex_array[data['sex']-1] + '\nОплата: ' + data['cost'] + '\n' + '\nСсылка: ' + data[
                        'url'] + '\nПолное описание: ' + data['descript']
-        cursor.close()
+        connection.close()
         return zadaniye
     except Exception as ex:
         print(ex)
         print('error selecttask')
 
 
+
 def update_after_task_upload(user_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('update users set now_task_id = 0,full_count = full_count+1,today_tasks=today_tasks+1'
                        ' where user_id = %s', (user_id,))
         connection.commit()
         cursor.close()
-    except Exception:
+        connection.close()
+    except Exception as ex:
         print(ex)
         print('error in updateaftertask...')
 
 
+
 def send_mass_message(message_text):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('select user_id from users')
-        cursor.close()
         data = cursor.fetchall()
+        cursor.close()
+        connection.close()
         for id_dict in data:
             user_id = id_dict['user_id']
             try:
@@ -418,16 +471,20 @@ def send_mass_message(message_text):
         print('error in sendmass')
 
 
+
 def update_description(description, task_id):
     try:
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('update tasks set descript=%s where id=%s', (description, task_id))
         connection.commit()
         cursor.close()
+        connection.close()
     except Exception as ex:
         print('error in update_descript')
         print(ex)
-        cursor.close()
+
+
 
 
 def send_full_task_admin(task_id,user_id):
@@ -444,6 +501,91 @@ def send_full_task_admin(task_id,user_id):
         print('error im sendfulltask')
         bot.send_message(user_id,'Какая то ошибка, не смог отправить тебе полное задание', reply_markup=admin_keyboard)
 
+def deltask(task_id):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('delete from tasks where id=%s', (task_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    except Exception as exc:
+        print('error in deltask')
+        print(exc)
+
+
+
+def vis(task_id):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('update tasks set vision=1 where id=%s', (task_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    except Exception as ex:
+        print('error in vis')
+        print(ex)
+
+
+
+def unvis(task_id):
+    try:
+        cconnection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('update tasks set vision=0 where id=%s', (task_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    except Exception as ex:
+        print('error in vis')
+        print(ex)
+
+
+def userquery(task_id,chat_id):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('select category_id from tasks where id=%s', (task_id,))
+        category_id = cursor.fetchall()[0]['category_id']
+        cursor.execute(
+            'update users set now_task_id=(%s),today_categories_ids=concat(today_categories_ids,%s) where user_id = %s'
+            , (task_id, str(category_id) + ';', chat_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    except Exception as ex:
+        print('err in user')
+        print(ex)
+
+
+def used(chat_id):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('select new_task_today from users where user_id=%s', (chat_id))
+        new_task_today = cursor.fetchall()[0]['new_task_today']
+        if new_task_today == 1:
+            print('ты еблан')
+            bot.send_message(chat_id, 'Ты уже отменял сегодня задание. Будь добр, выполни это.',
+                             reply_markup=start_keyboard)
+            cursor.close()
+        else:
+            cursor.execute('update users set now_task_id=0, new_task_today = 1, '
+                           'today_categories_ids=substring(today_categories_ids,1,length(today_categories_ids)-2)'
+                           'where user_id = %s', (chat_id,))
+
+            connection.commit()
+            bot.send_message(chat_id, 'Окей, посмотри другие задания',
+                             reply_markup=start_keyboard)
+            select = select_tasks_ids_for_user(chat_id)
+            send_sorted_tasks(chat_id, select)
+            cursor.close()
+            connection.close()
+    except Exception as ex:
+        print('err in used')
+        print(ex)
+
 
 
 
@@ -457,8 +599,7 @@ def query_callback(callback_query):
     if str(callback_query.data).startswith('admin'):
         send_full_task_admin(task_id, user_id=callback_query.message.chat.id)
     elif str(callback_query.data).startswith('del'):
-        cursor.execute('delete from tasks where id=%s', (task_id,))
-        connection.commit()
+        deltask(task_id)
         bot.send_message(callback_query.message.chat.id, 'Задание удалено', reply_markup=admin_keyboard)
     elif str(callback_query.data).startswith('edit'):
         bot.send_message(callback_query.message.chat.id, 'Введи комманду /desc, айди задания и новое описание после него',
@@ -466,46 +607,21 @@ def query_callback(callback_query):
         bot.send_message(callback_query.message.chat.id,
                          f'В данном случае /desc {task_id}', reply_markup=admin_keyboard)
     elif str(callback_query.data).startswith('vis'):
-        cursor.execute('update tasks set vision=1 where id=%s', (task_id,))
-        connection.commit()
+        vis(task_id)
         bot.send_message(callback_query.message.chat.id, f'Задание c айди {task_id} теперь видно всем', reply_markup=admin_keyboard)
     elif str(callback_query.data).startswith('unvis'):
-        cursor.execute('update tasks set vision=0 where id=%s', (task_id,))
-        connection.commit()
+        unvis(task_id)
         bot.send_message(callback_query.message.chat.id, f'Задание c айди {task_id} недоступно для всех',
                          reply_markup=admin_keyboard)
     elif str(callback_query.data).startswith('user'):
         inline_button = telebot.types.InlineKeyboardButton('Я уже выполнял это задание', callback_data=f'used {task_id}')
         inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
         bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
-        cursor.execute('select category_id from tasks where id=%s', (task_id,))
-        category_id = cursor.fetchall()[0]['category_id']
-        cursor.execute(
-            'update users set now_task_id=(%s),today_categories_ids=concat(today_categories_ids,%s) where user_id = %s'
-            , (task_id, str(category_id) + ';', callback_query.message.chat.id))
-        connection.commit()
+        userquery(task_id, callback_query.message.chat.id)
         bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
                          reply_markup=start_keyboard)
     elif str(callback_query.data).startswith('used'):
-        cursor.execute('select new_task_today from users where user_id=%s', (callback_query.message.chat.id,))
-        new_task_today = cursor.fetchall()[0]['new_task_today']
-        if new_task_today == 1:
-            print('ты еблан')
-            bot.send_message(callback_query.message.chat.id, 'Ты уже отменял сегодня задание. Будь добр, выполни это.',
-                             reply_markup=start_keyboard)
-        else:
-            cursor.execute('update users set now_task_id=0, new_task_today = 1, '
-                           'today_categories_ids=substring(today_categories_ids,1,length(today_categories_ids)-2)'
-                           'where user_id = %s', (callback_query.message.chat.id,))
-
-            connection.commit()
-            bot.send_message(callback_query.message.chat.id, 'Окей, посмотри другие задания',
-                             reply_markup=start_keyboard)
-            select = select_tasks_ids_for_user(callback_query.message.chat.id)
-            send_sorted_tasks(callback_query.message.chat.id,select)
-
-
-
+        used(callback_query.message.chat.id)
     elif str(callback_query.data).startswith('allow'):
         bot.send_message(task_id,'Твое задание одобрили, в ближайшее время с тобой свяжется админ.',
                          reply_markup=start_keyboard)
@@ -514,9 +630,7 @@ def query_callback(callback_query):
         bot.send_message(task_id,
                          'Твое задание не одобрили.', reply_markup=start_keyboard)
         task_id = re.findall(pattern,str(callback_query.data))[1]
-        cursor.execute('update tasks set vision = 1 where id=%s', (task_id,))
-        connection.commit()
-    cursor.close()
+        vis(task_id)
 
 
 
@@ -529,7 +643,10 @@ def query_callback(callback_query):
 
 @bot.message_handler(content_types=['text'])
 def message_text_handler(message):
+
     user_id = message.from_user.id
+    db_table_val(message.from_user.id)
+    print(user_id)
     # admin
     if user_id in ADMINS:
         if message.text == '/start':
@@ -700,40 +817,59 @@ def photo_handler(message):
 
 
 def update_with_time():
-    cursor = connection.cursor()
-    cursor.execute('update users set today_tasks = 0, today_categories_ids = ";", new_task_today = 0')
-    connection.commit()
-    cursor.close()
-    sleep(60*60*24)
-
-sql_time_update_thread = Thread(target=update_with_time)
-sql_time_update_thread.start()
-
-polling_thread = Thread(target=bot.polling, args=(True,0))
-polling_thread.start()
-
-
-
-while True:
-    sleep(50)
     try:
-        connection = pymysql.connect(host=host,
-                                     port=3306,
-                                     user=user,
-                                     password=password,
-                                     database=db_name,
-                                     cursorclass=pymysql.cursors.DictCursor
-                                     )
-
-        db_setting1 = 'SET SQL_SAFE_UPDATES = 0'
-
-        connection.cursor().execute(db_setting1)
-
-        connection.cursor().close()
-
-
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('update users set today_tasks = 0, today_categories_ids = ";", new_task_today = 0')
+        connection.commit()
+        cursor.close()
+        connection.close()
+        sleep(60 * 60 * 24)
 
     except Exception as ex:
         print("Error")
         print(ex)
+
+
+sql_time_update_thread = Thread(target=update_with_time)
+sql_time_update_thread.start()
+
+polling_thread = Thread(target=bot.polling, args=(True, 0))
+polling_thread.daemon = True
+polling_thread.start()
+
+
+
+
+
+#
+# while True:
+#     sleep(10)
+#     try:
+#         print('success')
+#         cursor = connection.cursor()
+#         cursor.execute('select 1+1')
+#         cursor.close
+#         print('success')
+#         # connection.close()
+#         # connection = pymysql.connect(host=host,
+#         #                              port=3306,
+#         #                              user=user,
+#         #                              password=password,
+#         #                              database=db_name,
+#         #                              cursorclass=pymysql.cursors.DictCursor
+#         #                              )
+#         #
+#         # db_setting1 = 'SET SQL_SAFE_UPDATES = 0'
+#         #
+#         # connection.cursor().execute(db_setting1)
+#         #
+#         # connection.cursor().close()
+#
+#
+#
+#     except Exception as ex:
+#         print("Error")
+#         print(1)
+#         print(ex)
 

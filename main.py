@@ -650,6 +650,9 @@ def message_text_handler(message):
             elif select == 'banned':
                 bot.send_message(user_id, 'Ты уже сегодня делал задание на этой платформе! Выбери другую!',
                                  reply_markup=select_keyboard)
+            elif select is None:
+                bot.send_message(message.from_user.id, 'Упс..Какая то ошибка, пробуй еще раз',
+                                 reply_markup=select_keyboard)
             elif len(select) == 0:
                 bot.send_message(message.from_user.id, 'Для тебя нет подходящих заданий',
                                  reply_markup=select_keyboard)

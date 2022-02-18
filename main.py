@@ -418,7 +418,7 @@ def select_task(task_id):
     try:
         connection = connect_to_db()
         cursor = connection.cursor()
-        cursor.execute('select * from tasks where id=%s and vision=1', (task_id,))
+        cursor.execute('select * from tasks where id=%s', (task_id,))
         data = cursor.fetchall()[0]
         zadaniye = 'Краткое описание: ' + data['name'] + '\nПлатформа: ' + platforms_ids[
             str(data['category_id'])] + '\nId задания: ' + str(data['id']) + \

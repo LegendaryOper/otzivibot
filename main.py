@@ -519,7 +519,7 @@ def vis(task_id):
     try:
         connection = connect_to_db()
         cursor = connection.cursor()
-        cursor.execute('update tasks set vision=1 where id=%s', (task_id,))
+        cursor.execute('update tasks set vision = 1 where id=%s', (task_id,))
         connection.commit()
         cursor.close()
         connection.close()
@@ -531,14 +531,14 @@ def vis(task_id):
 
 def unvis(task_id):
     try:
-        cconnection = connect_to_db()
+        connection = connect_to_db()
         cursor = connection.cursor()
         cursor.execute('update tasks set vision=0 where id=%s', (task_id,))
         connection.commit()
         cursor.close()
         connection.close()
     except Exception as ex:
-        print('error in vis')
+        print('error in unvis')
         print(ex)
 
 

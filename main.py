@@ -418,7 +418,7 @@ def select_task(task_id):
     try:
         connection = connect_to_db()
         cursor = connection.cursor()
-        cursor.execute('select * from tasks where id=%s', (task_id,))
+        cursor.execute('select * from tasks where id=%s and vision=1', (task_id,))
         data = cursor.fetchall()[0]
         zadaniye = 'Краткое описание: ' + data['name'] + '\nПлатформа: ' + platforms_ids[
             str(data['category_id'])] + '\nId задания: ' + str(data['id']) + \
@@ -775,7 +775,7 @@ def message_text_handler(message):
                 bot.send_message(message.from_user.id, 'Для тебя нет подходящих заданий',
                                  reply_markup=select_keyboard)
             else:
-                send_sorted_tasks(user_id,select)
+                send_sorted_tasks(user_id, select)
 
         # if message.text == (pk задания)
         #   if pk задания not in banned_categories для юзера

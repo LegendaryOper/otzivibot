@@ -618,6 +618,7 @@ def query_callback(callback_query):
         inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
         bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
         userquery(task_id, callback_query.message.chat.id)
+        unvis(task_id)
         bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
                          reply_markup=start_keyboard)
     elif str(callback_query.data).startswith('used'):

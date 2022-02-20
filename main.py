@@ -154,7 +154,6 @@ def check_pravila(user_id):
         cursor = connection.cursor()
         cursor.execute('select pravila from users where user_id=%s', (user_id,))
         data = cursor.fetchall()[0]['pravila']
-        print(data, user_id)
         cursor.close()
         connection.close()
         if data == 0:
@@ -219,7 +218,6 @@ def select_user_info(user_id):
         cursor1 = connection.cursor()
         cursor1.execute('select * from users where user_id=%s', (user_id,))
         data = cursor1.fetchall()[0]
-        print(cursor1.fetchall())
         try:
             result = 'Твой пол: '+sex_array[data['sex']-1] + '\nВсего выполнено заданий: '+str(data['full_count'])\
                  + '\nВыполнено заданий за сегодня: ' + str(data['today_tasks'])
@@ -257,6 +255,8 @@ def select_tasks_ids_for_user(user_id):
         data = cursor1.fetchall()[0]
         pattern = r'\d+'
         match = re.findall(pattern, str(data['today_categories_ids']))
+        print('match', match)
+        print(str(data['category_id']))
         if data['now_task_id'] > 0:
             cursor1.close()
             connection.close()
@@ -265,14 +265,13 @@ def select_tasks_ids_for_user(user_id):
             cursor1.close()
             connection.close()
             return 'too_many'
+        elif str(data['category_id']) in match:
+            cursor1.close()
+            connection.close()
+            return 'banned'
         cursor1.execute('select id, category_id from tasks where vision = 1 and sex in (%s,3) and category_id=%s',
                         (data['sex'], (data['category_id'])))
         tasks = cursor1.fetchall()
-        for task in tasks:
-            if str(task['category_id']) in match:
-                cursor1.close()
-                connection.close()
-                return 'banned'
         cursor1.close()
         connection.close()
         return [task['id'] for task in tasks]
@@ -647,7 +646,6 @@ def message_text_handler(message):
 
     user_id = message.from_user.id
     db_table_val(message.from_user.id)
-    print(user_id)
     # admin
     if user_id in ADMINS:
         if message.text == '/start':

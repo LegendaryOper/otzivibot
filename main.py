@@ -148,6 +148,7 @@ def fill_banned_ids():
 
 
 banned_ids = fill_banned_ids()
+print('banned ids', banned_ids)
 
 
 # функции
@@ -751,12 +752,14 @@ def message_text_handler(message):
             banned_user_id = match.group()
             bot.send_message(user_id, ban_user(banned_user_id, True), reply_markup=admin_keyboard)
             banned_ids.append(banned_user_id)
+            print('banned_ids', banned_ids)
         if message.text.startswith('/unban'):
             pattern = r'\d+'
             match = re.search(pattern, str(message.text))
             banned_user_id = match.group()
             bot.send_message(user_id, ban_user(banned_user_id, False), reply_markup=admin_keyboard)
-            banned_ids.pop(banned_user_id)
+            banned_ids.remove(banned_user_id)
+            print('banned_ids', banned_ids)
         if message.text.startswith('/desc'):
             try:
                 pattern = r'\d+'

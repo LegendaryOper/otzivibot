@@ -722,8 +722,9 @@ def message_text_handler(message):
 
     user_id = message.from_user.id
     db_table_val(message.from_user.id)
-    if user_id in banned_ids:
+    if str(user_id) in banned_ids:
         bot.send_message(user_id, 'Ты забанен, можешь не пытаться')
+        return
     # admin
     if user_id in ADMINS:
         if message.text == '/start':

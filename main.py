@@ -128,6 +128,28 @@ tasks_keyboard.row(tasks_messages[0], tasks_messages[1])
 exit_keyboard = telebot.types.ReplyKeyboardMarkup(True)
 exit_keyboard.row('Назад')
 
+
+def fill_banned_ids():
+    try:
+        arr = []
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('select user_id from users where is_banned = 1')
+        data = cursor.fetchall()
+        for banned in data:
+            arr.append(banned['user_id'])
+        print(arr)
+        cursor.close()
+        connection.close()
+        return arr
+    except Exception as ex:
+        print(ex)
+        print('error in fillbannedids')
+
+
+banned_ids = fill_banned_ids()
+
+
 # функции
 def check_userid_in_database(id):
     try:
@@ -145,6 +167,30 @@ def check_userid_in_database(id):
         print("Ошибка в checkuserid")
         print(ex)
         cursor.close()
+
+
+
+
+def ban_user(user_id,flag):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        if flag:
+            cursor.execute('update users set is_banned = 1 where user_id = %s', (user_id,))
+            result = f'Пользователь с айди {user_id} успешно забанен'
+        else:
+            cursor.execute('update users set is_banned = 0 where user_id = %s', (user_id,))
+            result = f'Пользователь с айди {user_id} успешно разбанен'
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return result
+    except Exception as ex:
+        print(ex)
+        print('ex in banuser')
+        return 'Какая то ошибка..'
+
+
 
 
 
@@ -188,7 +234,8 @@ def db_table_val(user_id: int):
         connection = connect_to_db()
         cursor1 = connection.cursor()
         if check_userid_in_database(user_id):
-            cursor1.execute('INSERT INTO users (user_id,full_count,now_task_id,today_tasks,today_categories_ids, pravila) VALUES (%s,0,0,0,";",0)', (user_id,))
+            cursor1.execute('INSERT INTO users (user_id,full_count,now_task_id,today_tasks,today_categories_ids, '
+                            'pravila, is_banned) VALUES (%s,0,0,0,";",0,0)', (user_id,))
             connection.commit()
         cursor1.close()
         connection.close()
@@ -674,6 +721,8 @@ def message_text_handler(message):
 
     user_id = message.from_user.id
     db_table_val(message.from_user.id)
+    if user_id in banned_ids:
+        bot.send_message(user_id, 'Ты забанен, можешь не пытаться')
     # admin
     if user_id in ADMINS:
         if message.text == '/start':
@@ -696,6 +745,18 @@ def message_text_handler(message):
             except Exception as ex:
                 bot.send_message(message.from_user.id, 'Упс..что то пошло не так, попробуй еще раз',reply_markup=admin_keyboard)
                 print(ex)
+        if message.text.startswith('/ban'):
+            pattern = r'\d+'
+            match = re.search(pattern, str(message.text))
+            banned_user_id = match.group()
+            bot.send_message(user_id, ban_user(banned_user_id, True), reply_markup=admin_keyboard)
+            banned_ids.append(banned_user_id)
+        if message.text.startswith('/unban'):
+            pattern = r'\d+'
+            match = re.search(pattern, str(message.text))
+            banned_user_id = match.group()
+            bot.send_message(user_id, ban_user(banned_user_id, False), reply_markup=admin_keyboard)
+            banned_ids.pop(banned_user_id)
         if message.text.startswith('/desc'):
             try:
                 pattern = r'\d+'
@@ -739,10 +800,7 @@ def message_text_handler(message):
                                                    'Пример: /send Всем привет!')
         if message.text.startswith('/send'):
             send_mass_message(message.text[6:])
-
-
     else:
-
         if message.text == '/start':
             db_table_val(message.from_user.id)
             bot.send_message(message.from_user.id, start_message, reply_markup=start_keyboard)
@@ -812,7 +870,7 @@ def message_text_handler(message):
 
 @bot.message_handler(content_types=['photo', 'document'])
 def photo_handler(message):
-    sub_id=message.from_user.id
+    sub_id = message.from_user.id
     task = select_user_now_task(message.from_user.id)
     if task == 'Задание не найдено':
         bot.send_message(sub_id, 'У тебя сейчас нет заданий на выполнении', reply_markup=start_keyboard)
@@ -823,18 +881,18 @@ def photo_handler(message):
     task_id = select_user_now_task_id(message.from_user.id)
     inline_button = telebot.types.InlineKeyboardButton('Принять', callback_data=f'allow {sub_id}')
     inline_button1 = telebot.types.InlineKeyboardButton('Отклонить', callback_data=f'abadon {sub_id},{task_id}')
-    inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button,inline_button1)
+    inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button, inline_button1)
     if message.photo is not None:
         idphoto = message.photo[0].file_id
         for admin in ADMINS:
-            bot.send_message(admin, f'Пользователь @{message.from_user.username} прислал скриншот на проверку\n'
+            bot.send_message(admin, f'Пользователь @{message.from_user.username}, id:{sub_id} прислал скриншот на проверку\n'
                                     f'Вот его задание:\n' + task)
             bot.send_photo(admin, idphoto, reply_markup=inline_keyboard)
         update_after_task_upload(message.from_user.id)
     else:
         idphoto = message.document.file_id
         for admin in ADMINS:
-            bot.send_message(admin, f'Пользователь @{message.from_user.username} прислал скриншот на проверку\n'
+            bot.send_message(admin, f'Пользователь @{message.from_user.username}, id:{sub_id} прислал скриншот на проверку\n'
                                     f'Вот его задание:\n'+task)
             bot.send_document(admin, idphoto, reply_markup=inline_keyboard)
         update_after_task_upload(message.from_user.id)

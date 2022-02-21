@@ -541,6 +541,28 @@ def unvis(task_id):
         print(ex)
 
 
+def check_user_today_tasks(task_id,chat_id):
+    try:
+        connection = connect_to_db()
+        cursor = connection.cursor()
+        cursor.execute('select today_categories_ids from users where user_id = %s', (chat_id, ))
+        data = cursor.fetchall()[0]
+        pattern = r'\d+'
+        ids = re.findall(pattern, data['today_categories_ids'])
+        cursor.execute('select category_id from tasks where id = %s', (task_id,))
+        data = cursor.fetchall()[0]
+        cursor.close()
+        connection.close()
+        if str(data['category_id']) in ids:
+            return False
+        else:
+            return True
+
+    except Exception as ex:
+        print(ex)
+        print('error in check_user_today_tasks')
+
+
 def userquery(task_id,chat_id):
     try:
         connection = connect_to_db()
@@ -615,11 +637,17 @@ def query_callback(callback_query):
     elif str(callback_query.data).startswith('user'):
         inline_button = telebot.types.InlineKeyboardButton('Я уже выполнял это задание', callback_data=f'used {task_id}')
         inline_keyboard = telebot.types.InlineKeyboardMarkup().add(inline_button)
-        bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
-        userquery(task_id, callback_query.message.chat.id)
-        unvis(task_id)
-        bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
-                         reply_markup=start_keyboard)
+        if check_user_today_tasks(task_id, callback_query.message.chat.id):
+            bot.send_message(callback_query.message.chat.id, select_task(task_id), reply_markup=inline_keyboard)
+            userquery(task_id, callback_query.message.chat.id)
+            unvis(task_id)
+            bot.send_message(callback_query.message.chat.id, 'Как сделаешь задание - обязательно пришли скрин выполнения',
+                             reply_markup=start_keyboard)
+        else:
+            bot.send_message(callback_query.message.chat.id,
+                             'Не пытайся меня обмануть, ты уже делал задание в этой категории',
+                             reply_markup=start_keyboard)
+
     elif str(callback_query.data).startswith('used'):
         used(callback_query.message.chat.id)
     elif str(callback_query.data).startswith('allow'):

@@ -137,7 +137,7 @@ def fill_banned_ids():
         cursor.execute('select user_id from users where is_banned = 1')
         data = cursor.fetchall()
         for banned in data:
-            arr.append(banned['user_id'])
+            arr.append(str(banned['user_id']))
         print(arr)
         cursor.close()
         connection.close()
@@ -751,14 +751,14 @@ def message_text_handler(message):
             match = re.search(pattern, str(message.text))
             banned_user_id = match.group()
             bot.send_message(user_id, ban_user(banned_user_id, True), reply_markup=admin_keyboard)
-            banned_ids.append(banned_user_id)
+            banned_ids.append(str(banned_user_id))
             print('banned_ids', banned_ids)
         if message.text.startswith('/unban'):
             pattern = r'\d+'
             match = re.search(pattern, str(message.text))
             banned_user_id = match.group()
             bot.send_message(user_id, ban_user(banned_user_id, False), reply_markup=admin_keyboard)
-            banned_ids.remove(banned_user_id)
+            banned_ids.remove(str(banned_user_id))
             print('banned_ids', banned_ids)
         if message.text.startswith('/desc'):
             try:

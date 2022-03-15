@@ -26,7 +26,7 @@ def connect_to_db():
     return connection
 connection = connect_to_db()
 token = '5181846470:AAEQZCDqenxYj29lH25KXBxuwKoKCpASVwc'
-ADMINS = [619616592,761983343]
+ADMINS = [619616592, 761983343, 423973284, 331375989]
 bot = telebot.TeleBot(token)
 
 start_message = 'Привет, я бот для заработка на выполнении простых заданий. Если хочешь заработать, нажимай на кнопку ниже'
